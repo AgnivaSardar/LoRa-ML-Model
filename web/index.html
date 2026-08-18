@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TACTICAL MFD LORA MESH TERMINAL GRID</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- UNIFIED 3-SITE HANDSHAKE & TELEMETRY SYNCHRONIZATION LOADER -->
+    <div id="syncLoader" class="sync-loader-backdrop">
+        <div class="sync-box">
+            <div class="sync-title">
+                <span>SYSTEM INITIALIZATION & 3-SITE HANDSHAKE SYNCHRONIZATION</span>
+                <span id="sync-spinner" style="font-size: 10px; color: #ffcc00;">[⏳ SYNCING...]</span>
+            </div>
+            <div id="sync-row-root" class="sync-row active-site">
+                <span>1. ROOT DASHBOARD (http://localhost:8000/)</span>
+                <span id="sync-root" class="status-ok">[✓ LOCAL HOST ACTIVE]</span>
+            </div>
+            <div id="sync-row-control" class="sync-row">
+                <span>2. CPS CONTROL ENGINE (http://localhost:8000/control.html)</span>
+                <span id="sync-control" class="status-wait">[⏳ CONNECTING...]</span>
+            </div>
+            <div id="sync-row-topology" class="sync-row">
+                <span>3. 2D SPATIAL MAP GRAPH (http://localhost:8000/topology.html)</span>
+                <span id="sync-topology" class="status-wait">[⏳ CONNECTING...]</span>
+            </div>
+
+            <!-- LIVE DIAGNOSTIC HANDSHAKE LOGGER -->
+            <div class="sync-log-box" id="sync-log-box">
+                <div class="sync-log-line log-ok">[00:00:00] Initializing Tactical CPS LoRa Mesh System...</div>
+                <div class="sync-log-line log-warn">[00:00:00] Checking mutual presence across 3 web terminals...</div>
+            </div>
+
+            <div class="sync-footer-actions">
+                <button class="mfd-btn mfd-btn-refresh" onclick="triggerHardRefreshAll()">🔄 HARD REFRESH ALL SITES</button>
+                <button class="mfd-btn mfd-btn-success" onclick="forceUnlockSync()">⚡ FORCE SYNC & PROCEED</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- REAL-TIME ACTIVE ROUTE BANNER (CLEAN ROUTE / PARTITION ONLY - NO MINIMUM MESH) -->
+    <div id="liveRouteBanner" class="route-banner route-banner-healthy">
+        <span><b>TACTICAL MFD LORA MESH GRID (PORT: 8000)</b></span>
+        <span id="primaryRouteText">ACTIVE PRIMARY ROUTE: A ➔ B ➔ D ➔ HUB</span>
+        <div style="display: flex; gap: 8px; align-items: center;">
+            <button id="liveModeBtn" class="mfd-btn mfd-btn-golive" style="padding: 2px 8px; font-size: 9px;" onclick="toggleLiveMode()">🟢 GO LIVE</button>
+            <button class="mfd-btn mfd-btn-refresh" style="padding: 2px 8px; font-size: 9px;" onclick="triggerHardRefreshAll()">🔄 REFRESH ALL 3 SITES</button>
+        </div>
+    </div>
+
+    <div class="grid-container">
+        
+        <!-- GRID 1: CENTRAL ML HUB -->
+        <div class="grid-cell">
+            <div class="cell-header">
+                <span>MODULE: CENTRAL ML ROUTING HUB</span>
+                <span class="cell-tag">PORT: 9000</span>
+            </div>
+            <div class="terminal-body" id="term-CENTRAL_HUB">
+                <div class="log-line">[SYS] Central ML Routing Engine Active</div>
+            </div>
+        </div>
+
+        <!-- GRID 2: NODE A -->
+        <div class="grid-cell">
+            <div class="cell-header">
+                <span>MODULE: NODE A [SOURCE]</span>
+                <span class="cell-tag">PORT: 9001</span>
+            </div>
+            <div class="terminal-body" id="term-A">
+                <div class="log-line">[SYS] Node A Listening</div>
+            </div>
+        </div>
+
+        <!-- GRID 3: NODE B -->
+        <div class="grid-cell">
+            <div class="cell-header">
+                <span>MODULE: NODE B [INTERMEDIATE]</span>
+                <span class="cell-tag">PORT: 9002</span>
+            </div>
+            <div class="terminal-body" id="term-B">
+                <div class="log-line">[SYS] Node B Listening</div>
+            </div>
+        </div>
+
+        <!-- GRID 4: NODE C -->
+        <div class="grid-cell">
+            <div class="cell-header">
+                <span>MODULE: NODE C [INTERMEDIATE]</span>
+                <span class="cell-tag">PORT: 9003</span>
+            </div>
+            <div class="terminal-body" id="term-C">
+                <div class="log-line">[SYS] Node C Listening</div>
+            </div>
+        </div>
+
+        <!-- GRID 5: NODE D -->
+        <div class="grid-cell">
+            <div class="cell-header">
+                <span>MODULE: NODE D [INTERMEDIATE]</span>
+                <span class="cell-tag">PORT: 9004</span>
+            </div>
+            <div class="terminal-body" id="term-D">
+                <div class="log-line">[SYS] Node D Listening</div>
+            </div>
+        </div>
+
+        <!-- GRID 6: NODE E -->
+        <div class="grid-cell">
+            <div class="cell-header">
+                <span>MODULE: NODE E [INTERMEDIATE]</span>
+                <span class="cell-tag">PORT: 9005</span>
+            </div>
+            <div class="terminal-body" id="term-E">
+                <div class="log-line">[SYS] Node E Listening</div>
+            </div>
+        </div>
+
+        <!-- GRID 7: NODE HUB DESTINATION -->
+        <div class="grid-cell">
+            <div class="cell-header">
+                <span>MODULE: NODE HUB [DESTINATION]</span>
+                <span class="cell-tag">PORT: 9006</span>
+            </div>
+            <div class="terminal-body" id="term-HUB">
+                <div class="log-line">[SYS] Destination Hub Listening</div>
+            </div>
+        </div>
+
+        <!-- GRID 8: NAVIGATION & CONTROL ACCESS -->
+        <div class="grid-cell control-cell" style="padding: 12px; display: flex; flex-direction: column; justify-content: center; gap: 8px;">
+            <div class="cell-header control-header">MODULE: CPS NAVIGATION & CONTROL ACCESS</div>
+            
+            <a href="/control.html" style="text-decoration: none;">
+                <button class="mfd-btn mfd-btn-active" style="width: 100%; padding: 8px;">⚙️ OPEN SEPARATE CONTROL PAGE (http://localhost:8000/CONTROL.HTML)</button>
+            </a>
+
+            <a href="/topology.html" target="_blank" style="text-decoration: none;">
+                <button class="mfd-btn mfd-btn-active" style="width: 100%; padding: 8px;">🌐 OPEN 2D SPATIAL MAP GRAPH (http://localhost:8000/TOPOLOGY.HTML)</button>
+            </a>
+
+            <button class="mfd-btn mfd-btn-success" style="width: 100%; padding: 8px;" onclick="sendPacket()">🚀 TRANSMIT DATA PACKET NOW</button>
+            <button class="mfd-btn mfd-btn-refresh" style="width: 100%; padding: 8px;" onclick="triggerHardRefreshAll()">🔄 HARD REFRESH ALL 3 SITES</button>
+        </div>
+
+    </div>
+
+    <script>
+        const SITE_ID = 'root';
+        let isSynchronized = false;
+        let syncHeartbeatTimer = null;
+
+        // 3-SITE HANDSHAKE SYNCHRONIZATION ENGINE
+        async function run3SiteHandshakeSync() {
+            const rootElem = document.getElementById('sync-root');
+            const ctrlElem = document.getElementById('sync-control');
+            const topoElem = document.getElementById('sync-topology');
+            const logBox = document.getElementById('sync-log-box');
+            const spinner = document.getElementById('sync-spinner');
+
+            try {
+                const res = await fetch('/api/sync_state', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ site_id: SITE_ID, action: 'ping' })
+                });
+                const data = await res.json();
+                renderSyncStatus(data);
+
+                if (data.all_synced && !isSynchronized) {
+                    isSynchronized = true;
+                    spinner.innerText = '[✓ SYNCHRONIZED]';
+                    spinner.style.color = '#00ff66';
+                    appendSyncLog('✓ ALL 3 SITES SYNCHRONIZED & LINKED! UNLOCKING MAIN DASHBOARD...', 'log-ok');
+
+                    await fetch('/api/sync_state', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ site_id: SITE_ID, action: 'ready' })
+                    });
+
+                    setTimeout(() => {
+                        const loader = document.getElementById('syncLoader');
+                        if (loader) loader.style.display = 'none';
+                    }, 450);
+                }
+
+            } catch (err) {
+                appendSyncLog('⚠️ Waiting for server response...', 'log-warn');
+            }
+        }
+
+        function renderSyncStatus(data) {
+            const rootElem = document.getElementById('sync-root');
+            const ctrlElem = document.getElementById('sync-control');
+            const topoElem = document.getElementById('sync-topology');
+            const rowCtrl = document.getElementById('sync-row-control');
+            const rowTopo = document.getElementById('sync-row-topology');
+
+            if (!data.sites) return;
+
+            // Root
+            rootElem.innerText = '[✓ CONNECTED & SYNCED]';
+            rootElem.className = 'status-ok';
+
+            // Control
+            if (data.sites.control && data.sites.control.status === 'ONLINE') {
+                ctrlElem.innerText = '[✓ CONNECTED & SYNCED]';
+                ctrlElem.className = 'status-ok';
+                rowCtrl.className = 'sync-row active-site';
+            } else {
+                ctrlElem.innerText = '[⏳ WAITING: Open control.html]';
+                ctrlElem.className = 'status-wait';
+                rowCtrl.className = 'sync-row slow-site';
+            }
+
+            // Topology
+            if (data.sites.topology && data.sites.topology.status === 'ONLINE') {
+                topoElem.innerText = '[✓ CONNECTED & SYNCED]';
+                topoElem.className = 'status-ok';
+                rowTopo.className = 'sync-row active-site';
+            } else {
+                topoElem.innerText = '[⏳ WAITING: Open topology.html]';
+                topoElem.className = 'status-wait';
+                rowTopo.className = 'sync-row slow-site';
+            }
+
+            // Diagnostic log updates
+            if (data.slow_site && !isSynchronized) {
+                const slowName = (data.slow_site === 'control') ? 'CPS CONTROL ENGINE (/control.html)' : '2D SPATIAL MAP (/topology.html)';
+                appendSyncLog(`⏳ WAITING: Site '${slowName}' is taking time to synchronize...`, 'log-warn');
+            }
+        }
+
+        function appendSyncLog(msg, typeClass = '') {
+            const logBox = document.getElementById('sync-log-box');
+            if (!logBox) return;
+            const ts = new Date().toTimeString().split(' ')[0];
+            const div = document.createElement('div');
+            div.className = `sync-log-line ${typeClass}`;
+            div.innerText = `[${ts}] ${msg}`;
+            logBox.appendChild(div);
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
+        function forceUnlockSync() {
+            isSynchronized = true;
+            appendSyncLog('⚡ MANUAL PROCEED: Unlocking dashboard in single-operator mode...', 'log-ok');
+            setTimeout(() => {
+                document.getElementById('syncLoader').style.display = 'none';
+            }, 250);
+        }
+
+        // TRIGGER SIMULTANEOUS HARD REFRESH ON ALL 3 SITES
+        async function triggerHardRefreshAll() {
+            try {
+                await fetch('/api/trigger_hard_refresh', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ site_id: SITE_ID })
+                });
+            } catch (e) {
+                window.location.reload(true);
+            }
+        }
+
+        async function fetchLogs() {
+            try {
+                const res = await fetch('/api/logs');
+                const data = await res.json();
+                
+                const nodes = ['CENTRAL_HUB', 'A', 'B', 'C', 'D', 'E', 'HUB'];
+                nodes.forEach(node => {
+                    const elem = document.getElementById(`term-${node}`);
+                    if (elem && data[node]) {
+                        const logs = data[node];
+                        elem.innerHTML = logs.map(line => `<div class="log-line">${escapeHtml(line)}</div>`).join('');
+                        elem.scrollTop = elem.scrollHeight;
+                    }
+                });
+            } catch (err) {}
+        }
+
+        async function fetchLiveRoute() {
+            try {
+                const res = await fetch('/api/topology');
+                const data = await res.json();
+                updateRouteBanner(data.primary_path, data.is_partitioned, data.route_info);
+                updateLiveModeUI(data.is_live_mode);
+            } catch (err) {}
+        }
+
+        let isCurrentLiveMode = false;
+        function updateLiveModeUI(isLive) {
+            isCurrentLiveMode = !!isLive;
+            const btn = document.getElementById('liveModeBtn');
+            if (!btn) return;
+            if (isCurrentLiveMode) {
+                btn.className = 'mfd-btn mfd-btn-freeze';
+                btn.innerText = '⏸️ FREEZE';
+            } else {
+                btn.className = 'mfd-btn mfd-btn-golive';
+                btn.innerText = '🟢 GO LIVE';
+            }
+        }
+
+        async function toggleLiveMode() {
+            try {
+                const res = await fetch('/api/toggle_live_mode', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ live_mode: !isCurrentLiveMode })
+                });
+                const data = await res.json();
+                updateLiveModeUI(data.is_live_mode);
+                fetchLiveRoute();
+            } catch (err) {}
+        }
+
+        function updateRouteBanner(primaryPath, isPartitioned, routeInfo) {
+            const banner = document.getElementById('liveRouteBanner');
+            const routeText = document.getElementById('primaryRouteText');
+            if (!banner || !routeText) return;
+
+            if (isPartitioned || !primaryPath || primaryPath.length < 2) {
+                banner.className = 'route-banner route-banner-partitioned';
+                let prevStr = (routeInfo && routeInfo.previous_path) ? routeInfo.previous_path.join(' ➔ ') : '';
+                let prevProb = (routeInfo && routeInfo.previous_p_success_pct !== undefined) ? ` (PREV P: ${routeInfo.previous_p_success_pct}%)` : '';
+                routeText.innerHTML = `NO ROUTE FOUND (NETWORK PARTITIONED)${prevStr ? ` | LAST: ${prevStr}${prevProb}` : ''}`;
+            } else {
+                banner.className = 'route-banner route-banner-healthy';
+                const currPathStr = primaryPath.join(' ➔ ');
+                const currProb = (routeInfo && routeInfo.current_p_success_pct !== undefined) ? `${routeInfo.current_p_success_pct}%` : '98.5%';
+                
+                if (routeInfo && routeInfo.previous_path && routeInfo.previous_path.join(',') !== primaryPath.join(',')) {
+                    const prevPathStr = routeInfo.previous_path.join(' ➔ ');
+                    const prevProb = `${routeInfo.previous_p_success_pct}%`;
+                    const delta = routeInfo.delta_p_pct || 0;
+                    const deltaStr = (delta >= 0) ? `+${delta}%` : `${delta}%`;
+                    const reason = routeInfo.switch_reason ? ` [${routeInfo.switch_reason}]` : '';
+                    routeText.innerHTML = `ACTIVE: <b style="color:#00ff66;">${currPathStr}</b> (P: ${currProb}) | PREV: <span style="color:#00b4d8;">${prevPathStr}</span> (P: ${prevProb}) [Δ: ${deltaStr}]${reason}`;
+                } else {
+                    routeText.innerHTML = `ACTIVE PRIMARY ROUTE: <b style="color:#00ff66;">${currPathStr}</b> (P: ${currProb}) <span style="color:#00e5ff;">[STEADY]</span>`;
+                }
+            }
+        }
+
+        async function sendPacket() {
+            await fetch('/api/send_packet', { method: 'POST' });
+            setTimeout(() => { fetchLogs(); fetchLiveRoute(); }, 40);
+        }
+
+        function escapeHtml(text) {
+            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+
+        // SUB-10MS REAL-TIME SSE CROSS-SITE STREAM LISTENER
+        function connectRealtimeSSE() {
+            const evtSource = new EventSource('/api/events');
+            
+            evtSource.onmessage = () => { fetchLogs(); fetchLiveRoute(); };
+            
+            evtSource.addEventListener('HARD_REFRESH', () => {
+                window.location.reload(true);
+            });
+
+            evtSource.addEventListener('SYNC_STATE_CHANGED', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    renderSyncStatus(data);
+                } catch (err) {}
+            });
+
+            evtSource.addEventListener('LIVE_MODE_CHANGED', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    updateLiveModeUI(data.is_live_mode);
+                    if (data.primary_path) updateRouteBanner(data.primary_path, data.primary_path.length < 2, data.route_info);
+                } catch (err) {}
+                fetchLogs();
+                fetchLiveRoute();
+            });
+
+            evtSource.addEventListener('CHAOS_INJECTED', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    updateRouteBanner(data.primary_path, data.is_partitioned, data.route_info);
+                } catch (err) {}
+                fetchLogs();
+            });
+
+            evtSource.addEventListener('STATE_UPDATE', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    updateRouteBanner(data.primary_path, data.is_partitioned, data.route_info);
+                } catch (err) {}
+                fetchLogs();
+            });
+
+            evtSource.addEventListener('PACKET_SENT', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    if (data.primary_path) updateRouteBanner(data.primary_path, false, data.route_info);
+                } catch (err) {}
+                fetchLogs();
+                fetchLiveRoute();
+            });
+
+            evtSource.addEventListener('NODE_MOVED', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    updateRouteBanner(data.primary_path, data.is_partitioned, data.route_info);
+                } catch (err) {}
+                fetchLogs();
+            });
+
+            evtSource.addEventListener('RADIUS_UPDATED', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    updateRouteBanner(data.primary_path, data.is_partitioned, data.route_info);
+                } catch (err) {}
+                fetchLogs();
+            });
+        }
+
+        // Start real-time sync & polling loops
+        syncHeartbeatTimer = setInterval(run3SiteHandshakeSync, 700);
+        setInterval(fetchLogs, 400);
+        setInterval(fetchLiveRoute, 1000);
+        
+        run3SiteHandshakeSync();
+        fetchLogs();
+        fetchLiveRoute();
+        connectRealtimeSSE();
+    </script>
+</body>
+</html>

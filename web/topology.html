@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>60FPS Client-Side JS Dijkstra Routing Engine & 2D Spatial Map</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .header-bar {
+            background-color: #030509;
+            padding: 6px 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1.5px solid #00e5ff;
+            user-select: none;
+            height: 40px;
+        }
+
+        .title {
+            font-size: 12px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            color: #00e5ff;
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .slider-wrap {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 10.5px;
+            color: #00b4d8;
+        }
+
+        .mfd-range {
+            accent-color: #00e5ff;
+            cursor: pointer;
+        }
+
+        .canvas-container {
+            flex: 1;
+            position: relative;
+            width: 100%;
+            height: calc(100vh - 72px);
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            background-color: #06090e;
+            cursor: crosshair;
+        }
+
+        .path-info {
+            position: absolute;
+            bottom: 14px;
+            left: 65px;
+            background: rgba(3, 5, 9, 0.95);
+            border: 1.5px solid #00e5ff;
+            padding: 8px 16px;
+            font-size: 11px;
+            color: #ffffff;
+            border-radius: 4px;
+            pointer-events: none;
+            box-shadow: 0 0 15px rgba(0, 229, 255, 0.3);
+        }
+        .primary-text { color: #00ff66; font-weight: bold; }
+        .partition-text { color: #ff3333; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <!-- UNIFIED 3-SITE HANDSHAKE & TELEMETRY SYNCHRONIZATION LOADER -->
+    <div id="syncLoader" class="sync-loader-backdrop">
+        <div class="sync-box">
+            <div class="sync-title">
+                <span>SYSTEM INITIALIZATION & 3-SITE HANDSHAKE SYNCHRONIZATION</span>
+                <span id="sync-spinner" style="font-size: 10px; color: #ffcc00;">[⏳ SYNCING...]</span>
+            </div>
+            <div id="sync-row-root" class="sync-row">
+                <span>1. ROOT DASHBOARD (http://localhost:8000/)</span>
+                <span id="sync-root" class="status-wait">[⏳ CONNECTING...]</span>
+            </div>
+            <div id="sync-row-control" class="sync-row">
+                <span>2. CPS CONTROL ENGINE (http://localhost:8000/control.html)</span>
+                <span id="sync-control" class="status-wait">[⏳ CONNECTING...]</span>
+            </div>
+            <div id="sync-row-topology" class="sync-row active-site">
+                <span>3. 2D SPATIAL MAP GRAPH (http://localhost:8000/topology.html)</span>
+                <span id="sync-topology" class="status-ok">[✓ LOCAL HOST ACTIVE]</span>
+            </div>
+
+            <!-- LIVE DIAGNOSTIC HANDSHAKE LOGGER -->
+            <div class="sync-log-box" id="sync-log-box">
+                <div class="sync-log-line log-ok">[00:00:00] Initializing 2D Spatial Map Engine...</div>
+                <div class="sync-log-line log-warn">[00:00:00] Connecting telemetry stream with Root and Control...</div>
+            </div>
+
+            <div class="sync-footer-actions">
+                <button class="mfd-btn mfd-btn-refresh" onclick="triggerHardRefreshAll()">🔄 HARD REFRESH ALL SITES</button>
+                <button class="mfd-btn mfd-btn-success" onclick="forceUnlockSync()">⚡ FORCE SYNC & PROCEED</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- REAL-TIME TOP HEADER BAR -->
+    <div class="header-bar">
+        <div class="title">MODULE: 60FPS REAL-TIME SPATIAL GPS TOPOLOGY & ML DIJKSTRA ROUTER</div>
+        <div class="controls">
+            <div class="slider-wrap">
+                <label>TX RANGE RADIUS:</label>
+                <input type="range" id="radiusSlider" class="mfd-range" min="1.2" max="4.8" step="0.2" value="2.8" oninput="onRadiusSliderChange(this.value)">
+                <span id="radiusValText">2.8 km</span>
+            </div>
+            <button id="liveModeBtn" class="mfd-btn mfd-btn-golive" onclick="toggleLiveMode()">🟢 GO LIVE</button>
+            <button class="mfd-btn mfd-btn-success" onclick="triggerPacketAnimation()">🚀 SEND PACKET</button>
+            <button class="mfd-btn" onclick="resetPositions()">RESET POSITIONS</button>
+            <button class="mfd-btn mfd-btn-refresh" onclick="triggerHardRefreshAll()">🔄 HARD REFRESH ALL</button>
+        </div>
+    </div>
+
+    <div class="canvas-container">
+        <canvas id="packetCanvas"></canvas>
+        <div class="path-info">
+            ACTIVE PRIMARY ROUTE: <span class="primary-text" id="primaryPathText">A ➔ B ➔ D ➔ HUB</span>
+        </div>
+    </div>
+
+    <script>
+        const SITE_ID = 'topology';
+        let isSynchronized = false;
+        let syncHeartbeatTimer = null;
+
+        const canvas = document.getElementById('packetCanvas');
+        const ctx = canvas.getContext('2d');
+        const primaryPathText = document.getElementById('primaryPathText');
+        const radiusValText = document.getElementById('radiusValText');
+
+        let width, height;
+        const nodeRadiusPx = 26;
+
+        const nodes = {
+            "A": { id: "A", lat: 12.9716, lon: 79.1588, radius_km: 2.8, x: 0, y: 0, battery: 100, failed: false },
+            "B": { id: "B", lat: 12.9860, lon: 79.1730, radius_km: 2.8, x: 0, y: 0, battery: 100, failed: false },
+            "C": { id: "C", lat: 12.9580, lon: 79.1760, radius_km: 2.8, x: 0, y: 0, battery: 100, failed: false },
+            "D": { id: "D", lat: 12.9930, lon: 79.1960, radius_km: 2.8, x: 0, y: 0, battery: 100, failed: false },
+            "E": { id: "E", lat: 12.9520, lon: 79.1990, radius_km: 2.8, x: 0, y: 0, battery: 100, failed: false },
+            "HUB": { id: "HUB", lat: 12.9740, lon: 79.2180, radius_km: 2.8, x: 0, y: 0, battery: 100, failed: false }
+        };
+
+        const minLon = 79.1450, maxLon = 79.2300;
+        const minLat = 12.9350, maxLat = 13.0100;
+
+        let activePrimaryPath = ["A", "B", "D", "HUB"];
+        let isNetworkPartitioned = false;
+        let activePackets = [];
+
+        let draggedNodeId = null;
+        let isDragging = false;
+
+        // 3-SITE HANDSHAKE SYNCHRONIZATION ENGINE
+        async function run3SiteHandshakeSync() {
+            const rootElem = document.getElementById('sync-root');
+            const ctrlElem = document.getElementById('sync-control');
+            const topoElem = document.getElementById('sync-topology');
+            const spinner = document.getElementById('sync-spinner');
+
+            try {
+                const res = await fetch('/api/sync_state', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ site_id: SITE_ID, action: 'ping' })
+                });
+                const data = await res.json();
+                renderSyncStatus(data);
+
+                if (data.all_synced && !isSynchronized) {
+                    isSynchronized = true;
+                    spinner.innerText = '[✓ SYNCHRONIZED]';
+                    spinner.style.color = '#00ff66';
+                    appendSyncLog('✓ ALL 3 SITES SYNCHRONIZED & LINKED! UNLOCKING 2D SPATIAL MAP...', 'log-ok');
+
+                    await fetch('/api/sync_state', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ site_id: SITE_ID, action: 'ready' })
+                    });
+
+                    setTimeout(() => {
+                        const loader = document.getElementById('syncLoader');
+                        if (loader) loader.style.display = 'none';
+                    }, 450);
+                }
+
+            } catch (err) {
+                appendSyncLog('⚠️ Waiting for server response...', 'log-warn');
+            }
+        }
+
+        function renderSyncStatus(data) {
+            const rootElem = document.getElementById('sync-root');
+            const ctrlElem = document.getElementById('sync-control');
+            const topoElem = document.getElementById('sync-topology');
+            const rowRoot = document.getElementById('sync-row-root');
+            const rowCtrl = document.getElementById('sync-row-control');
+
+            if (!data.sites) return;
+
+            // Topology (self)
+            topoElem.innerText = '[✓ CONNECTED & SYNCED]';
+            topoElem.className = 'status-ok';
+
+            // Root
+            if (data.sites.root && data.sites.root.status === 'ONLINE') {
+                rootElem.innerText = '[✓ CONNECTED & SYNCED]';
+                rootElem.className = 'status-ok';
+                rowRoot.className = 'sync-row active-site';
+            } else {
+                rootElem.innerText = '[⏳ WAITING: Open root (index)]';
+                rootElem.className = 'status-wait';
+                rowRoot.className = 'sync-row slow-site';
+            }
+
+            // Control
+            if (data.sites.control && data.sites.control.status === 'ONLINE') {
+                ctrlElem.innerText = '[✓ CONNECTED & SYNCED]';
+                ctrlElem.className = 'status-ok';
+                rowCtrl.className = 'sync-row active-site';
+            } else {
+                ctrlElem.innerText = '[⏳ WAITING: Open control.html]';
+                ctrlElem.className = 'status-wait';
+                rowCtrl.className = 'sync-row slow-site';
+            }
+
+            // Diagnostic log updates
+            if (data.slow_site && !isSynchronized) {
+                const slowName = (data.slow_site === 'root') ? 'ROOT DASHBOARD (/)' : 'CPS CONTROL ENGINE (/control.html)';
+                appendSyncLog(`⏳ WAITING: Site '${slowName}' is taking time to synchronize...`, 'log-warn');
+            }
+        }
+
+        function appendSyncLog(msg, typeClass = '') {
+            const logBox = document.getElementById('sync-log-box');
+            if (!logBox) return;
+            const ts = new Date().toTimeString().split(' ')[0];
+            const div = document.createElement('div');
+            div.className = `sync-log-line ${typeClass}`;
+            div.innerText = `[${ts}] ${msg}`;
+            logBox.appendChild(div);
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
+        function forceUnlockSync() {
+            isSynchronized = true;
+            appendSyncLog('⚡ MANUAL PROCEED: Unlocking 2D spatial map in single-operator mode...', 'log-ok');
+            setTimeout(() => {
+                document.getElementById('syncLoader').style.display = 'none';
+            }, 250);
+        }
+
+        // TRIGGER SIMULTANEOUS HARD REFRESH ON ALL 3 SITES
+        async function triggerHardRefreshAll() {
+            try {
+                await fetch('/api/trigger_hard_refresh', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ site_id: SITE_ID })
+                });
+            } catch (e) {
+                window.location.reload(true);
+            }
+        }
+
+        function resizeCanvas() {
+            width = canvas.width = canvas.parentElement.clientWidth;
+            height = canvas.height = canvas.parentElement.clientHeight;
+            updateGPSPixelCoordinates();
+        }
+
+        function updateGPSPixelCoordinates() {
+            const marginL = 70, marginR = 50, marginT = 50, marginB = 50;
+            const usableW = width - marginL - marginR;
+            const usableH = height - marginT - marginB;
+
+            Object.values(nodes).forEach(n => {
+                n.x = marginL + ((n.lon - minLon) / (maxLon - minLon)) * usableW;
+                n.y = height - marginB - ((n.lat - minLat) / (maxLat - minLat)) * usableH;
+            });
+        }
+
+        function pixelToGPS(x, y) {
+            const marginL = 70, marginR = 50, marginT = 50, marginB = 50;
+            const usableW = width - marginL - marginR;
+            const usableH = height - marginT - marginB;
+
+            const lon = minLon + ((x - marginL) / usableW) * (maxLon - minLon);
+            const lat = minLat + ((height - marginB - y) / usableH) * (maxLat - minLat);
+            return { lat: parseFloat(lat.toFixed(4)), lon: parseFloat(lon.toFixed(4)) };
+        }
+
+        function haversineDistKm(lat1, lon1, lat2, lon2) {
+            const R = 6371.0;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
+
+        // FETCH FULL SYNC STATE FROM BACKEND ROUTING ENGINE
+        async function fetchBackendTopology() {
+            try {
+                const res = await fetch('/api/topology');
+                const data = await res.json();
+                
+                if (data.primary_path) {
+                    activePrimaryPath = data.primary_path;
+                    isNetworkPartitioned = data.is_partitioned || (activePrimaryPath.length < 2);
+                    renderTopologyRouteBanner(activePrimaryPath, isNetworkPartitioned, data.route_info);
+                }
+
+                if (data.node_states) {
+                    Object.entries(data.node_states).forEach(([nodeId, state]) => {
+                        if (nodes[nodeId]) {
+                            nodes[nodeId].battery = state.battery_pct;
+                            nodes[nodeId].failed = (state.battery_pct <= 0.0);
+                        }
+                    });
+                }
+
+                if (data.node_gps) {
+                    Object.entries(data.node_gps).forEach(([nodeId, coords]) => {
+                        if (nodes[nodeId] && !isDragging) {
+                            nodes[nodeId].lat = coords[0];
+                            nodes[nodeId].lon = coords[1];
+                        }
+                    });
+                    if (!isDragging) updateGPSPixelCoordinates();
+                }
+
+                updateLiveModeUI(data.is_live_mode);
+
+            } catch (err) {}
+        }
+
+        function renderTopologyRouteBanner(primaryPath, isPartitioned, routeInfo) {
+            if (!primaryPathText) return;
+            if (isPartitioned || !primaryPath || primaryPath.length < 2) {
+                let prevStr = (routeInfo && routeInfo.previous_path) ? routeInfo.previous_path.join(' ➔ ') : '';
+                let prevProb = (routeInfo && routeInfo.previous_p_success_pct !== undefined) ? ` (PREV P: ${routeInfo.previous_p_success_pct}%)` : '';
+                primaryPathText.innerHTML = `<span class="partition-text">NO ROUTE FOUND (NETWORK PARTITIONED)${prevStr ? ` | LAST: ${prevStr}${prevProb}` : ''}</span>`;
+            } else {
+                const currPathStr = primaryPath.join(' ➔ ');
+                const currProb = (routeInfo && routeInfo.current_p_success_pct !== undefined) ? `${routeInfo.current_p_success_pct}%` : '98.5%';
+                
+                if (routeInfo && routeInfo.previous_path && routeInfo.previous_path.join(',') !== primaryPath.join(',')) {
+                    const prevPathStr = routeInfo.previous_path.join(' ➔ ');
+                    const prevProb = `${routeInfo.previous_p_success_pct}%`;
+                    const delta = routeInfo.delta_p_pct || 0;
+                    const deltaStr = (delta >= 0) ? `+${delta}%` : `${delta}%`;
+                    const reason = routeInfo.switch_reason ? ` [${routeInfo.switch_reason}]` : '';
+                    primaryPathText.innerHTML = `<b style="color:#00ff66;">${currPathStr}</b> (P: ${currProb}) | PREV: <span style="color:#00b4d8;">${prevPathStr}</span> (P: ${prevProb}) [Δ: ${deltaStr}]${reason}`;
+                } else {
+                    primaryPathText.innerHTML = `<b style="color:#00ff66;">${currPathStr}</b> (P: ${currProb}) <span style="color:#00e5ff;">[STEADY]</span>`;
+                }
+            }
+        }
+
+        let isCurrentLiveMode = false;
+        function updateLiveModeUI(isLive) {
+            isCurrentLiveMode = !!isLive;
+            const btn = document.getElementById('liveModeBtn');
+            if (!btn) return;
+            if (isCurrentLiveMode) {
+                btn.className = 'mfd-btn mfd-btn-freeze';
+                btn.innerText = '⏸️ FREEZE';
+            } else {
+                btn.className = 'mfd-btn mfd-btn-golive';
+                btn.innerText = '🟢 GO LIVE';
+            }
+        }
+
+        async function toggleLiveMode() {
+            try {
+                const res = await fetch('/api/toggle_live_mode', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ live_mode: !isCurrentLiveMode })
+                });
+                const data = await res.json();
+                updateLiveModeUI(data.is_live_mode);
+                fetchBackendTopology();
+            } catch (err) {}
+        }
+
+        // MOUSE DRAG HANDLERS
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            Object.values(nodes).forEach(n => {
+                const dist = Math.hypot(n.x - mouseX, n.y - mouseY);
+                if (dist <= nodeRadiusPx + 6) {
+                    draggedNodeId = n.id;
+                    isDragging = true;
+                }
+            });
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDragging && draggedNodeId && nodes[draggedNodeId]) {
+                const rect = canvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+
+                nodes[draggedNodeId].x = mouseX;
+                nodes[draggedNodeId].y = mouseY;
+
+                const gps = pixelToGPS(mouseX, mouseY);
+                nodes[draggedNodeId].lat = gps.lat;
+                nodes[draggedNodeId].lon = gps.lon;
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            if (isDragging && draggedNodeId) {
+                syncNodePositionsToBackend(draggedNodeId);
+            }
+            isDragging = false;
+            draggedNodeId = null;
+        });
+
+        async function syncNodePositionsToBackend(nodeId) {
+            if (nodeId && nodes[nodeId]) {
+                const res = await fetch('/api/update_node_pos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        node_id: nodeId,
+                        lat: nodes[nodeId].lat,
+                        lon: nodes[nodeId].lon
+                    })
+                });
+                const data = await res.json();
+                if (data.primary_path) {
+                    activePrimaryPath = data.primary_path;
+                    isNetworkPartitioned = (activePrimaryPath.length < 2);
+                    if (isNetworkPartitioned) {
+                        primaryPathText.innerHTML = '<span class="partition-text">NO ROUTE FOUND (NETWORK PARTITIONED)</span>';
+                    } else {
+                        primaryPathText.innerHTML = '<span class="primary-text">' + activePrimaryPath.join(' ➔ ') + '</span>';
+                    }
+                }
+            }
+        }
+
+        async function onRadiusSliderChange(val) {
+            const r = parseFloat(val);
+            radiusValText.innerText = `${r.toFixed(1)} km`;
+            Object.values(nodes).forEach(n => n.radius_km = r);
+
+            const res = await fetch('/api/update_node_radius', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ node_id: "ALL", radius_km: r })
+            });
+            const data = await res.json();
+            if (data.primary_path) {
+                activePrimaryPath = data.primary_path;
+                isNetworkPartitioned = (activePrimaryPath.length < 2);
+                if (isNetworkPartitioned) {
+                    primaryPathText.innerHTML = '<span class="partition-text">NO ROUTE FOUND (NETWORK PARTITIONED)</span>';
+                } else {
+                    primaryPathText.innerHTML = '<span class="primary-text">' + activePrimaryPath.join(' ➔ ') + '</span>';
+                }
+            }
+        }
+
+        async function resetPositions() {
+            nodes["A"].lat = 12.9716; nodes["A"].lon = 79.1588;
+            nodes["B"].lat = 12.9860; nodes["B"].lon = 79.1730;
+            nodes["C"].lat = 12.9580; nodes["C"].lon = 79.1760;
+            nodes["D"].lat = 12.9930; nodes["D"].lon = 79.1960;
+            nodes["E"].lat = 12.9520; nodes["E"].lon = 79.1990;
+            nodes["HUB"].lat = 12.9740; nodes["HUB"].lon = 79.2180;
+            updateGPSPixelCoordinates();
+            await syncNodePositionsToBackend("A");
+            fetchBackendTopology();
+        }
+
+        function triggerPacketAnimation() {
+            if (!activePrimaryPath || activePrimaryPath.length < 2) return;
+
+            let pathCoords = activePrimaryPath.filter(id => nodes[id]).map(id => ({ id: id }));
+            if (pathCoords.length >= 2) {
+                activePackets.push({
+                    path: pathCoords,
+                    currentHopIndex: 0,
+                    progress: 0.0,
+                    speed: 0.018
+                });
+            }
+        }
+
+        function updateAnimation() {
+            for (let i = activePackets.length - 1; i >= 0; i--) {
+                let pkt = activePackets[i];
+                pkt.progress += pkt.speed;
+                if (pkt.progress >= 1.0) {
+                    pkt.progress = 0.0;
+                    pkt.currentHopIndex++;
+                    if (pkt.currentHopIndex >= pkt.path.length - 1) {
+                        activePackets.splice(i, 1);
+                    }
+                }
+            }
+        }
+
+        function drawGeographicGPSGrid() {
+            const marginL = 60, marginR = 40, marginT = 40, marginB = 40;
+            const usableW = width - marginL - marginR;
+            const usableH = height - marginT - marginB;
+
+            ctx.strokeStyle = 'rgba(0, 229, 255, 0.06)';
+            ctx.lineWidth = 1;
+            ctx.fillStyle = '#64748b';
+            ctx.font = '9.5px Consolas, monospace';
+
+            const numLonTicks = 5;
+            for (let i = 0; i <= numLonTicks; i++) {
+                const lonVal = minLon + (i / numLonTicks) * (maxLon - minLon);
+                const x = marginL + (i / numLonTicks) * usableW;
+
+                ctx.beginPath();
+                ctx.moveTo(x, marginT);
+                ctx.lineTo(x, height - marginB);
+                ctx.stroke();
+
+                ctx.textAlign = 'center';
+                ctx.fillText(`${lonVal.toFixed(3)}°E`, x, height - marginB + 16);
+            }
+
+            const numLatTicks = 4;
+            for (let j = 0; j <= numLatTicks; j++) {
+                const latVal = minLat + (j / numLatTicks) * (maxLat - minLat);
+                const y = height - marginB - (j / numLatTicks) * usableH;
+
+                ctx.beginPath();
+                ctx.moveTo(marginL, y);
+                ctx.lineTo(width - marginR, y);
+                ctx.stroke();
+
+                ctx.textAlign = 'right';
+                ctx.fillText(`${latVal.toFixed(3)}°N`, marginL - 8, y + 3);
+            }
+
+            ctx.fillStyle = '#00e5ff';
+            ctx.font = 'bold 10px Consolas, monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText("GEOGRAPHIC LONGITUDE (°E)", width / 2, height - 8);
+        }
+
+        function drawRadioCoverageZones() {
+            const marginL = 70, marginR = 50;
+            const usableW = width - marginL - marginR;
+            const pxPerKm = usableW / (maxLon - minLon) * 0.012;
+
+            Object.values(nodes).forEach(n => {
+                const radiusPx = Math.max(30, n.radius_km * pxPerKm * 22.0);
+
+                const grad = ctx.createRadialGradient(n.x, n.y, 5, n.x, n.y, radiusPx);
+                grad.addColorStop(0, n.failed ? 'rgba(255, 51, 51, 0.08)' : 'rgba(0, 229, 255, 0.05)');
+                grad.addColorStop(0.8, 'rgba(0, 229, 255, 0.01)');
+                grad.addColorStop(1, 'rgba(0, 229, 255, 0.0)');
+
+                ctx.beginPath();
+                ctx.arc(n.x, n.y, radiusPx, 0, Math.PI * 2);
+                ctx.fillStyle = grad;
+                ctx.fill();
+
+                ctx.beginPath();
+                ctx.arc(n.x, n.y, radiusPx, 0, Math.PI * 2);
+                ctx.setLineDash([3, 3]);
+                ctx.strokeStyle = n.failed ? 'rgba(255, 51, 51, 0.35)' : 'rgba(0, 229, 255, 0.18)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                ctx.setLineDash([]);
+            });
+        }
+
+        function isSegmentInPath(u, v, path) {
+            if (!path || path.length < 2) return false;
+            for (let i = 0; i < path.length - 1; i++) {
+                if ((path[i] === u && path[i + 1] === v) || (path[i] === v && path[i + 1] === u)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function drawDynamicProximityLines() {
+            const keys = Object.keys(nodes);
+            for (let i = 0; i < keys.length; i++) {
+                for (let j = i + 1; j < keys.length; j++) {
+                    const n1 = nodes[keys[i]];
+                    const n2 = nodes[keys[j]];
+
+                    const distKm = haversineDistKm(n1.lat, n1.lon, n2.lat, n2.lon);
+                    const maxRangeKm = n1.radius_km + n2.radius_km;
+
+                    if (distKm <= maxRangeKm) {
+                        const isPrimary = isSegmentInPath(n1.id, n2.id, activePrimaryPath);
+                        const isDegraded = (n1.failed || n2.failed);
+
+                        ctx.beginPath();
+                        ctx.moveTo(n1.x, n1.y);
+                        ctx.lineTo(n2.x, n2.y);
+                        ctx.lineWidth = isPrimary ? 4.5 : (isDegraded ? 1.0 : 1.5);
+                        ctx.strokeStyle = isPrimary ? '#00e5ff' : (isDegraded ? 'rgba(255, 51, 51, 0.25)' : 'rgba(0, 229, 255, 0.18)');
+                        if (isDegraded && !isPrimary) ctx.setLineDash([4, 4]);
+                        ctx.stroke();
+                        ctx.setLineDash([]);
+
+                        const midX = (n1.x + n2.x) / 2;
+                        const midY = (n1.y + n2.y) / 2;
+                        const latMs = Math.round(65 + distKm * 10);
+
+                        ctx.fillStyle = isPrimary ? '#00e5ff' : (isDegraded ? '#ff5555' : '#64748b');
+                        ctx.font = '9px Consolas, monospace';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(`${distKm.toFixed(1)}km | ${latMs}ms`, midX, midY - 6);
+
+                        if (isPrimary) {
+                            drawArrow(ctx, n1.x, n1.y, n2.x, n2.y, 0.5, '#00ff66', 14);
+                        }
+                    }
+                }
+            }
+        }
+
+        function drawGraph() {
+            ctx.fillStyle = '#06090e';
+            ctx.fillRect(0, 0, width, height);
+
+            drawGeographicGPSGrid();
+            drawRadioCoverageZones();
+            drawDynamicProximityLines();
+
+            Object.values(nodes).forEach(n => {
+                ctx.beginPath();
+                ctx.arc(n.x, n.y, nodeRadiusPx, 0, Math.PI * 2);
+                
+                if (n.failed) {
+                    ctx.fillStyle = '#400a0a';
+                } else if (draggedNodeId === n.id) {
+                    ctx.fillStyle = '#ffcc00';
+                } else {
+                    ctx.fillStyle = '#ff1a1a';
+                }
+                ctx.fill();
+
+                ctx.lineWidth = n.failed ? 3.0 : 2.5;
+                ctx.strokeStyle = n.failed ? '#ff3333' : '#000000';
+                if (n.failed) ctx.setLineDash([3, 3]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                ctx.fillStyle = (draggedNodeId === n.id) ? '#000000' : '#ffffff';
+                ctx.font = 'bold 12px Consolas, monospace';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(n.id, n.x, n.y);
+
+                if (n.failed) {
+                    ctx.fillStyle = '#ff3333';
+                    ctx.font = 'bold 8.5px Consolas, monospace';
+                    ctx.fillText('[FAIL]', n.x, n.y + 16);
+                }
+            });
+
+            activePackets.forEach(pkt => {
+                if (pkt.currentHopIndex < pkt.path.length - 1) {
+                    const u = pkt.path[pkt.currentHopIndex].id;
+                    const v = pkt.path[pkt.currentHopIndex + 1].id;
+
+                    if (nodes[u] && nodes[v]) {
+                        const p1 = nodes[u];
+                        const p2 = nodes[v];
+
+                        const currX = p1.x + (p2.x - p1.x) * pkt.progress;
+                        const currY = p1.y + (p2.y - p1.y) * pkt.progress;
+
+                        drawArrow(ctx, p1.x, p1.y, p2.x, p2.y, pkt.progress, '#ffffff', 18);
+                        
+                        ctx.beginPath();
+                        ctx.arc(currX, currY, 6, 0, Math.PI * 2);
+                        ctx.fillStyle = '#00ff66';
+                        ctx.fill();
+                    }
+                }
+            });
+        }
+
+        function drawArrow(context, fromx, fromy, tox, toy, progress, color, arrowSize) {
+            const angle = Math.atan2(toy - fromy, tox - fromx);
+            const x = fromx + (tox - fromx) * progress;
+            const y = fromy + (toy - fromy) * progress;
+
+            context.save();
+            context.beginPath();
+            context.translate(x, y);
+            context.rotate(angle);
+            context.moveTo(-arrowSize, -arrowSize / 1.8);
+            context.lineTo(0, 0);
+            context.lineTo(-arrowSize, arrowSize / 1.8);
+            context.lineWidth = 3.5;
+            context.strokeStyle = color;
+            context.stroke();
+            context.restore();
+        }
+
+        // SUB-10MS REAL-TIME SSE CROSS-SITE STREAM LISTENER
+        function connectRealtimeSSE() {
+            const evtSource = new EventSource('/api/events');
+            
+            evtSource.onmessage = () => fetchBackendTopology();
+            
+            evtSource.addEventListener('HARD_REFRESH', () => {
+                window.location.reload(true);
+            });
+
+            evtSource.addEventListener('SYNC_STATE_CHANGED', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    renderSyncStatus(data);
+                } catch (err) {}
+            });
+
+            evtSource.addEventListener('CHAOS_INJECTED', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    if (data.primary_path) {
+                        activePrimaryPath = data.primary_path;
+                        isNetworkPartitioned = data.is_partitioned || (activePrimaryPath.length < 2);
+                        renderTopologyRouteBanner(activePrimaryPath, isNetworkPartitioned, data.route_info);
+                    }
+                } catch (err) {}
+                fetchBackendTopology();
+            });
+
+            evtSource.addEventListener('LIVE_MODE_CHANGED', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    updateLiveModeUI(data.is_live_mode);
+                    if (data.primary_path) {
+                        activePrimaryPath = data.primary_path;
+                        isNetworkPartitioned = (activePrimaryPath.length < 2);
+                        renderTopologyRouteBanner(activePrimaryPath, isNetworkPartitioned, data.route_info);
+                    }
+                } catch (err) {}
+                fetchBackendTopology();
+            });
+
+            evtSource.addEventListener('STATE_UPDATE', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    if (data.primary_path) {
+                        activePrimaryPath = data.primary_path;
+                        isNetworkPartitioned = (activePrimaryPath.length < 2);
+                        renderTopologyRouteBanner(activePrimaryPath, isNetworkPartitioned, data.route_info);
+                    }
+                } catch (err) {}
+                fetchBackendTopology();
+            });
+
+            evtSource.addEventListener('NODE_MOVED', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    if (data.primary_path) {
+                        activePrimaryPath = data.primary_path;
+                        isNetworkPartitioned = (activePrimaryPath.length < 2);
+                        renderTopologyRouteBanner(activePrimaryPath, isNetworkPartitioned, data.route_info);
+                    }
+                } catch (err) {}
+                fetchBackendTopology();
+            });
+
+            evtSource.addEventListener('RADIUS_UPDATED', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    if (data.primary_path) {
+                        activePrimaryPath = data.primary_path;
+                        isNetworkPartitioned = (activePrimaryPath.length < 2);
+                        renderTopologyRouteBanner(activePrimaryPath, isNetworkPartitioned, data.route_info);
+                    }
+                } catch (err) {}
+                fetchBackendTopology();
+            });
+
+            evtSource.addEventListener('PACKET_SENT', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    if (data.primary_path) renderTopologyRouteBanner(data.primary_path, false, data.route_info);
+                } catch (err) {}
+                triggerPacketAnimation();
+            });
+        }
+
+        function loop() {
+            updateAnimation();
+            drawGraph();
+            requestAnimationFrame(loop);
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        window.onload = () => {
+            resizeCanvas();
+            loop();
+            syncHeartbeatTimer = setInterval(run3SiteHandshakeSync, 700);
+            setInterval(fetchBackendTopology, 800);
+            run3SiteHandshakeSync();
+            fetchBackendTopology();
+            connectRealtimeSSE();
+            setInterval(triggerPacketAnimation, 3500);
+        };
+    </script>
+</body>
+</html>

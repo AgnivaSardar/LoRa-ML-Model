@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CPS CONTROL & 12-FEATURE ML METRICS ENGINE</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .control-page-container {
+            flex: 1;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            height: calc(100vh - 32px);
+        }
+
+        .control-header-panel {
+            background-color: #05131d;
+            border: 1.5px solid #00e5ff;
+            padding: 8px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            clip-path: polygon(0 8px, 8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px));
+        }
+
+        .panel-title {
+            font-size: 13px;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+
+        .panel-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .mfd-btn-lg {
+            padding: 7px 12px;
+            font-size: 10px;
+        }
+
+        .control-grid-layout {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: 8px;
+            overflow: hidden;
+        }
+
+        .side-control-box {
+            background-color: #040910;
+            border: 1.5px solid #00e5ff;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            clip-path: polygon(0 10px, 10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px));
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            font-size: 11px;
+        }
+
+        .control-group label {
+            color: #00b4d8;
+            font-weight: bold;
+        }
+
+        .mfd-select-lg {
+            width: 100%;
+            background-color: #020406;
+            color: #00e5ff;
+            border: 1px solid #00e5ff;
+            font-family: 'Consolas', monospace;
+            font-size: 11px;
+            padding: 5px;
+        }
+
+        .matrix-box {
+            background-color: #03070b;
+            border: 1.5px solid #00e5ff;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            clip-path: polygon(0 10px, 10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px));
+        }
+
+        .matrix-table-wrap {
+            flex: 1;
+            overflow: auto;
+            padding: 6px;
+        }
+
+        .mfd-table-lg {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10.5px;
+        }
+
+        .mfd-table-lg th, .mfd-table-lg td {
+            padding: 5px 7px;
+            text-align: center;
+            border: 1px solid #003554;
+        }
+
+        .mfd-table-lg th {
+            background-color: #071e2b;
+            color: #00b4d8;
+            font-weight: bold;
+            position: sticky;
+            top: 0;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- UNIFIED 3-SITE HANDSHAKE & TELEMETRY SYNCHRONIZATION LOADER -->
+    <div id="syncLoader" class="sync-loader-backdrop">
+        <div class="sync-box">
+            <div class="sync-title">
+                <span>SYSTEM INITIALIZATION & 3-SITE HANDSHAKE SYNCHRONIZATION</span>
+                <span id="sync-spinner" style="font-size: 10px; color: #ffcc00;">[⏳ SYNCING...]</span>
+            </div>
+            <div id="sync-row-root" class="sync-row">
+                <span>1. ROOT DASHBOARD (http://localhost:8000/)</span>
+                <span id="sync-root" class="status-wait">[⏳ CONNECTING...]</span>
+            </div>
+            <div id="sync-row-control" class="sync-row active-site">
+                <span>2. CPS CONTROL ENGINE (http://localhost:8000/control.html)</span>
+                <span id="sync-control" class="status-ok">[✓ LOCAL HOST ACTIVE]</span>
+            </div>
+            <div id="sync-row-topology" class="sync-row">
+                <span>3. 2D SPATIAL MAP GRAPH (http://localhost:8000/topology.html)</span>
+                <span id="sync-topology" class="status-wait">[⏳ CONNECTING...]</span>
+            </div>
+
+            <!-- LIVE DIAGNOSTIC HANDSHAKE LOGGER -->
+            <div class="sync-log-box" id="sync-log-box">
+                <div class="sync-log-line log-ok">[00:00:00] Initializing CPS Control Engine...</div>
+                <div class="sync-log-line log-warn">[00:00:00] Establishing high-speed sync link with Root and Topology...</div>
+            </div>
+
+            <div class="sync-footer-actions">
+                <button class="mfd-btn mfd-btn-refresh" onclick="triggerHardRefreshAll()">🔄 HARD REFRESH ALL SITES</button>
+                <button class="mfd-btn mfd-btn-success" onclick="forceUnlockSync()">⚡ FORCE SYNC & PROCEED</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- REAL-TIME ACTIVE ROUTE BANNER -->
+    <div id="liveRouteBanner" class="route-banner route-banner-healthy">
+        <span><b>TACTICAL CPS CONTROL & ML METRICS ENGINE</b></span>
+        <span id="primaryRouteText">ACTIVE PRIMARY ROUTE: A ➔ B ➔ D ➔ HUB</span>
+        <div style="display: flex; gap: 8px;">
+            <button class="mfd-btn mfd-btn-refresh" style="padding: 2px 8px; font-size: 9px;" onclick="triggerHardRefreshAll()">🔄 REFRESH ALL 3 SITES</button>
+        </div>
+    </div>
+
+    <div class="control-page-container">
+        
+        <div class="control-header-panel">
+            <div class="panel-title">MODULE: DEDICATED CPS CONTROL & 12-FEATURE ML METRICS ENGINE</div>
+            <div class="panel-actions">
+                <a href="/" style="text-decoration: none;">
+                    <button class="mfd-btn mfd-btn-lg">RETURN TO 7-GRID DASHBOARD</button>
+                </a>
+                <a href="/topology.html" target="_blank" style="text-decoration: none;">
+                    <button class="mfd-btn mfd-btn-lg mfd-btn-active">2D SPATIAL MAP GRAPH</button>
+                </a>
+                <button class="mfd-btn mfd-btn-lg mfd-btn-refresh" onclick="triggerHardRefreshAll()">🔄 HARD REFRESH ALL</button>
+            </div>
+        </div>
+
+        <div class="control-grid-layout">
+            
+            <!-- LEFT CONTROL PANEL WITH DYNAMIC FROM & TO NODE SELECTORS -->
+            <div class="side-control-box">
+                <div class="cell-header">DYNAMIC NODE TARGETING & ACTIONS</div>
+
+                <div class="control-group">
+                    <label>SIMULATION ENGINE MODE:</label>
+                    <button id="liveModeBtn" class="mfd-btn mfd-btn-lg mfd-btn-golive" style="padding: 8px 6px;" onclick="toggleLiveMode()">🟢 GO LIVE: START DYNAMIC NOISE</button>
+                </div>
+
+                <hr style="border-color: #005f73; margin: 2px 0;">
+
+                <div class="control-group">
+                    <label>FROM NODE:</label>
+                    <select id="fromNodeSelect" class="mfd-select-lg">
+                        <option value="B" selected>NODE B</option>
+                        <option value="A">NODE A</option>
+                        <option value="C">NODE C</option>
+                        <option value="D">NODE D</option>
+                        <option value="E">NODE E</option>
+                        <option value="HUB">NODE HUB</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label>TO NODE:</label>
+                    <select id="toNodeSelect" class="mfd-select-lg">
+                        <option value="D" selected>NODE D</option>
+                        <option value="A">NODE A</option>
+                        <option value="B">NODE B</option>
+                        <option value="C">NODE C</option>
+                        <option value="E">NODE E</option>
+                        <option value="HUB">NODE HUB</option>
+                    </select>
+                </div>
+
+                <hr style="border-color: #005f73; margin: 2px 0;">
+
+                <button class="mfd-btn mfd-btn-lg mfd-btn-active" onclick="sendPacket()">🚀 TRANSMIT DATA PACKET</button>
+                <button class="mfd-btn mfd-btn-lg mfd-btn-warn" onclick="triggerChaos('Link Fading')">⚠️ DEGRADE LINK (FROM ➔ TO)</button>
+                <button class="mfd-btn mfd-btn-lg mfd-btn-warn" onclick="triggerChaos('Overheat & Congestion')">🔥 OVERHEAT FROM NODE</button>
+                <button class="mfd-btn mfd-btn-lg mfd-btn-warn" onclick="triggerChaos('Battery Depletion')">⚡ DRAIN FROM NODE BATTERY</button>
+                <button class="mfd-btn mfd-btn-alarm" onclick="triggerChaos('Complete Node Failure')">❌ FAIL FROM NODE</button>
+                <button class="mfd-btn mfd-btn-lg mfd-btn-success" onclick="triggerChaos('Healthy / Recover All')">💚 RECOVER ALL MESH NODES</button>
+                <button class="mfd-btn mfd-btn-refresh" onclick="triggerHardRefreshAll()">🔄 HARD REFRESH ALL 3 SITES</button>
+            </div>
+
+            <!-- RIGHT 12-FEATURE ML METRICS MATRIX -->
+            <div class="matrix-box">
+                <div class="cell-header">12-FEATURE LORA METRICS & RANDOM FOREST PREDICTIONS</div>
+                <div class="matrix-table-wrap">
+                    <table class="mfd-table-lg">
+                        <thead>
+                            <tr>
+                                <th>LINK</th>
+                                <th>DIST</th>
+                                <th>RSSI</th>
+                                <th>SNR</th>
+                                <th>PDR</th>
+                                <th>LAT</th>
+                                <th>RET</th>
+                                <th>ETX</th>
+                                <th>QUE</th>
+                                <th>BAT</th>
+                                <th>TEMP</th>
+                                <th>ML P(SUCC)</th>
+                                <th>COST</th>
+                            </tr>
+                        </thead>
+                        <tbody id="metrics-body">
+                            <!-- Dynamically populated -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <script>
+        const SITE_ID = 'control';
+        let isSynchronized = false;
+        let syncHeartbeatTimer = null;
+
+        // 3-SITE HANDSHAKE SYNCHRONIZATION ENGINE
+        async function run3SiteHandshakeSync() {
+            const rootElem = document.getElementById('sync-root');
+            const ctrlElem = document.getElementById('sync-control');
+            const topoElem = document.getElementById('sync-topology');
+            const spinner = document.getElementById('sync-spinner');
+
+            try {
+                const res = await fetch('/api/sync_state', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ site_id: SITE_ID, action: 'ping' })
+                });
+                const data = await res.json();
+                renderSyncStatus(data);
+
+                if (data.all_synced && !isSynchronized) {
+                    isSynchronized = true;
+                    spinner.innerText = '[✓ SYNCHRONIZED]';
+                    spinner.style.color = '#00ff66';
+                    appendSyncLog('✓ ALL 3 SITES SYNCHRONIZED & LINKED! UNLOCKING CONTROL ENGINE...', 'log-ok');
+
+                    await fetch('/api/sync_state', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ site_id: SITE_ID, action: 'ready' })
+                    });
+
+                    setTimeout(() => {
+                        const loader = document.getElementById('syncLoader');
+                        if (loader) loader.style.display = 'none';
+                    }, 450);
+                }
+
+            } catch (err) {
+                appendSyncLog('⚠️ Waiting for server response...', 'log-warn');
+            }
+        }
+
+        function renderSyncStatus(data) {
+            const rootElem = document.getElementById('sync-root');
+            const ctrlElem = document.getElementById('sync-control');
+            const topoElem = document.getElementById('sync-topology');
+            const rowRoot = document.getElementById('sync-row-root');
+            const rowTopo = document.getElementById('sync-row-topology');
+
+            if (!data.sites) return;
+
+            // Control (self)
+            ctrlElem.innerText = '[✓ CONNECTED & SYNCED]';
+            ctrlElem.className = 'status-ok';
+
+            // Root
+            if (data.sites.root && data.sites.root.status === 'ONLINE') {
+                rootElem.innerText = '[✓ CONNECTED & SYNCED]';
+                rootElem.className = 'status-ok';
+                rowRoot.className = 'sync-row active-site';
+            } else {
+                rootElem.innerText = '[⏳ WAITING: Open root (index)]';
+                rootElem.className = 'status-wait';
+                rowRoot.className = 'sync-row slow-site';
+            }
+
+            // Topology
+            if (data.sites.topology && data.sites.topology.status === 'ONLINE') {
+                topoElem.innerText = '[✓ CONNECTED & SYNCED]';
+                topoElem.className = 'status-ok';
+                rowTopo.className = 'sync-row active-site';
+            } else {
+                topoElem.innerText = '[⏳ WAITING: Open topology.html]';
+                topoElem.className = 'status-wait';
+                rowTopo.className = 'sync-row slow-site';
+            }
+
+            // Diagnostic log updates
+            if (data.slow_site && !isSynchronized) {
+                const slowName = (data.slow_site === 'root') ? 'ROOT DASHBOARD (/)' : '2D SPATIAL MAP (/topology.html)';
+                appendSyncLog(`⏳ WAITING: Site '${slowName}' is taking time to synchronize...`, 'log-warn');
+            }
+        }
+
+        function appendSyncLog(msg, typeClass = '') {
+            const logBox = document.getElementById('sync-log-box');
+            if (!logBox) return;
+            const ts = new Date().toTimeString().split(' ')[0];
+            const div = document.createElement('div');
+            div.className = `sync-log-line ${typeClass}`;
+            div.innerText = `[${ts}] ${msg}`;
+            logBox.appendChild(div);
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
+        function forceUnlockSync() {
+            isSynchronized = true;
+            appendSyncLog('⚡ MANUAL PROCEED: Unlocking control engine in single-operator mode...', 'log-ok');
+            setTimeout(() => {
+                document.getElementById('syncLoader').style.display = 'none';
+            }, 250);
+        }
+
+        // TRIGGER SIMULTANEOUS HARD REFRESH ON ALL 3 SITES
+        async function triggerHardRefreshAll() {
+            try {
+                await fetch('/api/trigger_hard_refresh', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ site_id: SITE_ID })
+                });
+            } catch (e) {
+                window.location.reload(true);
+            }
+        }
+
+        async function fetchTelemetry() {
+            try {
+                const res = await fetch('/api/telemetry');
+                const data = await res.json();
+                const matrix = data.link_matrix || [];
+                const activeNodes = data.active_nodes || ["A", "B", "C", "D", "E", "HUB"];
+                
+                updateNodeDropdowns(activeNodes);
+                updateRouteBanner(data.primary_path, data.is_partitioned, data.route_info);
+                updateLiveModeUI(data.is_live_mode);
+
+                const tbody = document.getElementById('metrics-body');
+                if (!tbody) return;
+
+                let html = '';
+                matrix.forEach(row => {
+                    const pSucc = row.ml_p_success;
+                    const succClass = (pSucc > 75) ? 'val-good' : ((pSucc > 40) ? 'val-warn' : 'val-alarm');
+
+                    html += `<tr>
+                        <td><b>${row.link}</b></td>
+                        <td>${row.distance_km}km</td>
+                        <td>${row.rssi}</td>
+                        <td>${row.snr}</td>
+                        <td>${row.pdr}</td>
+                        <td>${row.latency_ms}</td>
+                        <td>${row.retries}</td>
+                        <td>${row.etx}</td>
+                        <td>${row.queue_pct}%</td>
+                        <td>${row.battery_pct}%</td>
+                        <td>${row.temperature_c}°C</td>
+                        <td class="${succClass}">${pSucc}%</td>
+                        <td class="val-ml">${row.edge_cost}</td>
+                    </tr>`;
+                });
+                tbody.innerHTML = html;
+            } catch (err) {}
+        }
+
+        let isCurrentLiveMode = false;
+        function updateLiveModeUI(isLive) {
+            isCurrentLiveMode = !!isLive;
+            const btn = document.getElementById('liveModeBtn');
+            if (!btn) return;
+            if (isCurrentLiveMode) {
+                btn.className = 'mfd-btn mfd-btn-lg mfd-btn-freeze';
+                btn.innerText = '⏸️ FREEZE / STATIC MODE (ACTIVE)';
+            } else {
+                btn.className = 'mfd-btn mfd-btn-lg mfd-btn-golive';
+                btn.innerText = '🟢 GO LIVE: START DYNAMIC NOISE';
+            }
+        }
+
+        async function toggleLiveMode() {
+            try {
+                const res = await fetch('/api/toggle_live_mode', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ live_mode: !isCurrentLiveMode })
+                });
+                const data = await res.json();
+                updateLiveModeUI(data.is_live_mode);
+                fetchTelemetry();
+            } catch (err) {}
+        }
+
+        function updateRouteBanner(primaryPath, isPartitioned, routeInfo) {
+            const banner = document.getElementById('liveRouteBanner');
+            const routeText = document.getElementById('primaryRouteText');
+            if (!banner || !routeText) return;
+
+            if (isPartitioned || !primaryPath || primaryPath.length < 2) {
+                banner.className = 'route-banner route-banner-partitioned';
+                let prevStr = (routeInfo && routeInfo.previous_path) ? routeInfo.previous_path.join(' ➔ ') : '';
+                let prevProb = (routeInfo && routeInfo.previous_p_success_pct !== undefined) ? ` (PREV P: ${routeInfo.previous_p_success_pct}%)` : '';
+                routeText.innerHTML = `NO ROUTE FOUND (NETWORK PARTITIONED)${prevStr ? ` | LAST: ${prevStr}${prevProb}` : ''}`;
+            } else {
+                banner.className = 'route-banner route-banner-healthy';
+                const currPathStr = primaryPath.join(' ➔ ');
+                const currProb = (routeInfo && routeInfo.current_p_success_pct !== undefined) ? `${routeInfo.current_p_success_pct}%` : '98.5%';
+                
+                if (routeInfo && routeInfo.previous_path && routeInfo.previous_path.join(',') !== primaryPath.join(',')) {
+                    const prevPathStr = routeInfo.previous_path.join(' ➔ ');
+                    const prevProb = `${routeInfo.previous_p_success_pct}%`;
+                    const delta = routeInfo.delta_p_pct || 0;
+                    const deltaStr = (delta >= 0) ? `+${delta}%` : `${delta}%`;
+                    const reason = routeInfo.switch_reason ? ` [${routeInfo.switch_reason}]` : '';
+                    routeText.innerHTML = `ACTIVE: <b style="color:#00ff66;">${currPathStr}</b> (P: ${currProb}) | PREV: <span style="color:#00b4d8;">${prevPathStr}</span> (P: ${prevProb}) [Δ: ${deltaStr}]${reason}`;
+                } else {
+                    routeText.innerHTML = `ACTIVE PRIMARY ROUTE: <b style="color:#00ff66;">${currPathStr}</b> (P: ${currProb}) <span style="color:#00e5ff;">[STEADY]</span>`;
+                }
+            }
+        }
+
+        let knownActiveNodes = [];
+        function updateNodeDropdowns(nodesList) {
+            if (JSON.stringify(nodesList) === JSON.stringify(knownActiveNodes)) return;
+            knownActiveNodes = nodesList;
+
+            const fromSelect = document.getElementById('fromNodeSelect');
+            const toSelect = document.getElementById('toNodeSelect');
+            
+            const currFrom = fromSelect.value;
+            const currTo = toSelect.value;
+
+            let html = nodesList.map(n => `<option value="${n}">NODE ${n}</option>`).join('');
+            fromSelect.innerHTML = html;
+            toSelect.innerHTML = html;
+
+            if (nodesList.includes(currFrom)) fromSelect.value = currFrom;
+            if (nodesList.includes(currTo)) toSelect.value = currTo;
+        }
+
+        async function sendPacket() {
+            await fetch('/api/send_packet', { method: 'POST' });
+        }
+
+        async function triggerChaos(scenario) {
+            const fromNode = document.getElementById('fromNodeSelect').value;
+            const toNode = document.getElementById('toNodeSelect').value;
+            const targetEdge = `${fromNode}->${toNode}`;
+
+            try {
+                const res = await fetch('/api/inject_chaos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        scenario: scenario,
+                        target_node: fromNode,
+                        target_edge: targetEdge
+                    })
+                });
+                const data = await res.json();
+                if (data.primary_path) {
+                    updateRouteBanner(data.primary_path, data.primary_path.length < 2);
+                }
+                fetchTelemetry();
+            } catch (err) {}
+        }
+
+        // SUB-10MS REAL-TIME SSE STREAM LISTENER
+        function connectRealtimeSSE() {
+            const evtSource = new EventSource('/api/events');
+            
+            evtSource.onmessage = () => fetchTelemetry();
+            
+            evtSource.addEventListener('HARD_REFRESH', () => {
+                window.location.reload(true);
+            });
+
+            evtSource.addEventListener('SYNC_STATE_CHANGED', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    renderSyncStatus(data);
+                } catch (err) {}
+            });
+
+            evtSource.addEventListener('CHAOS_INJECTED', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    if (data.primary_path) updateRouteBanner(data.primary_path, data.is_partitioned, data.route_info);
+                } catch (err) {}
+                fetchTelemetry();
+            });
+
+            evtSource.addEventListener('STATE_UPDATE', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    if (data.primary_path) updateRouteBanner(data.primary_path, data.is_partitioned, data.route_info);
+                } catch (err) {}
+                fetchTelemetry();
+            });
+
+            evtSource.addEventListener('LIVE_MODE_CHANGED', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    updateLiveModeUI(data.is_live_mode);
+                    if (data.primary_path) updateRouteBanner(data.primary_path, data.primary_path.length < 2, data.route_info);
+                } catch (err) {}
+                fetchTelemetry();
+            });
+
+            evtSource.addEventListener('PACKET_SENT', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    if (data.primary_path) updateRouteBanner(data.primary_path, false, data.route_info);
+                } catch (err) {}
+                fetchTelemetry();
+            });
+
+            evtSource.addEventListener('NODE_MOVED', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    updateRouteBanner(data.primary_path, data.is_partitioned, data.route_info);
+                } catch (err) {}
+                fetchTelemetry();
+            });
+
+            evtSource.addEventListener('RADIUS_UPDATED', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    updateRouteBanner(data.primary_path, data.is_partitioned, data.route_info);
+                } catch (err) {}
+                fetchTelemetry();
+            });
+        }
+
+        syncHeartbeatTimer = setInterval(run3SiteHandshakeSync, 700);
+        setInterval(fetchTelemetry, 500);
+
+        run3SiteHandshakeSync();
+        fetchTelemetry();
+        connectRealtimeSSE();
+    </script>
+</body>
+</html>
