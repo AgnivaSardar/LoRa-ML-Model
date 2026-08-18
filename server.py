@@ -9,6 +9,7 @@ import sys
 import os
 import time
 import json
+import socket
 import threading
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from typing import Dict, Any, Optional
@@ -420,23 +421,13 @@ class CPSIndustrialHTTPHandler(SimpleHTTPRequestHandler):
 
 def get_local_ip():
     try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("1.1.1.1", 80))
-        ip = s.getsockname()[0]
-        s.close()
-        if ip and not ip.startswith("127."):
-            return ip
-    except Exception:
-        pass
-
-    try:
         hostname = socket.gethostname()
-        for ip in socket.gethostbyname_ex(hostname)[2]:
-            if not ip.startswith("127.") and not ip.startswith("169.254.") and ip != "192.168.56.1":
+        ips = socket.gethostbyname_ex(hostname)[2]
+        for ip in ips:
+            if not ip.startswith('127.') and not ip.startswith('169.254.') and not ip.startswith('192.168.56.'):
                 return ip
     except Exception:
         pass
-
     return "127.0.0.1"
 
 
