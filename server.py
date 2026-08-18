@@ -421,12 +421,23 @@ class CPSIndustrialHTTPHandler(SimpleHTTPRequestHandler):
 def get_local_ip():
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
+        s.connect(("1.1.1.1", 80))
         ip = s.getsockname()[0]
         s.close()
-        return ip
+        if ip and not ip.startswith("127."):
+            return ip
     except Exception:
-        return "127.0.0.1"
+        pass
+
+    try:
+        hostname = socket.gethostname()
+        for ip in socket.gethostbyname_ex(hostname)[2]:
+            if not ip.startswith("127.") and not ip.startswith("169.254.") and ip != "192.168.56.1":
+                return ip
+    except Exception:
+        pass
+
+    return "127.0.0.1"
 
 
 def run_industrial_server(port: Optional[int] = None):
