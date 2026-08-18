@@ -418,15 +418,36 @@ class CPSIndustrialHTTPHandler(SimpleHTTPRequestHandler):
         self.send_error(404, "Endpoint Not Found")
 
 
-def run_industrial_server(port: int = 8000):
+def get_local_ip():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
+
+
+def run_industrial_server(port: Optional[int] = None):
+    if port is None:
+        port = int(os.environ.get("PORT", 8000))
+
     manager = get_mesh_manager()
+    local_ip = get_local_ip()
+
     print("=========================================================================")
     print("LAUNCHING REAL-TIME SSE BROADCAST & 3-SITE SYNCHRONIZED MULTI-THREAD SERVER")
     print("=========================================================================")
-    print(f"Server URL: http://localhost:{port}")
-    print("Concurrent Sub-10ms SSE Event Streaming Active\n")
+    print(f"Local Host URL:       http://localhost:{port}")
+    print(f"Multi-Laptop LAN URL: http://{local_ip}:{port}")
+    print("-------------------------------------------------------------------------")
+    print(f"Laptop 1 (Root Grid):    http://{local_ip}:{port}/")
+    print(f"Laptop 2 (CPS Control):  http://{local_ip}:{port}/control.html")
+    print(f"Laptop 3 (2D Topology):  http://{local_ip}:{port}/topology.html")
+    print("=========================================================================\n")
 
-    httpd = ThreadingHTTPServer(("127.0.0.1", port), CPSIndustrialHTTPHandler)
+    httpd = ThreadingHTTPServer(("0.0.0.0", port), CPSIndustrialHTTPHandler)
     httpd.daemon_threads = True
     try:
         httpd.serve_forever()
