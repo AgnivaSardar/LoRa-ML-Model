@@ -11,7 +11,7 @@ import time
 import json
 import threading
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from src.cli_manager import get_mesh_manager
 
